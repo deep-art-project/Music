@@ -121,8 +121,8 @@ def train():
         os.makedirs(train_params["log_dir"])
     if not os.path.exists(train_params["restore_dir"]):
         os.makedirs(train_params["restore_dir"])
-    loss_log_file = open(train_params["log_dir"]+'loss_log.txt', 'w')
-    store_log_file = open(train_params["log_dir"]+'store_log.txt', 'w')
+    loss_log_file = open(train_params["log_dir"]+'loss_log.log', 'w')
+    store_log_file = open(train_params["log_dir"]+'store_log.log', 'w')
 
     '''
     Train in epochs
