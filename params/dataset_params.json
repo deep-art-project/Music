@@ -1,0 +1,13 @@
+{
+    "batch_size":1,
+    "shuffle":true,
+    "num_workers":4,
+    "audio_dir":"./mini_sample/",
+    "sample_rate":16000,
+    "receptive_field":4094,
+    "window_length":10000,
+    "silence_threshold":null,
+    "file_suffix":"wav",
+    "quantization_channels":256
+}
+
