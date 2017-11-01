@@ -85,7 +85,7 @@ class wavenet(nn.Module):
         Argument:
             wave_sample: one_hot encoded Variable
                          the third dimension of wave_sample must
-                         be at least self.receptive_field + 1
+                         be at least self.receptive_field
         Return:
             Assume the third dimension of wave_sample is l(sequence length)
             return a Variable of size (l - self.receptive_field + 1)

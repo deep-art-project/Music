@@ -54,12 +54,14 @@ class audio_dataset(Dataset):
 
         '''
         Cut the whole audio sequence into pieces of length window_length
-        + receptive_field and collect them into a queue
+        + receptive_field and collect them into a list
         '''
         sample_list = []
         while(len(audio)) > self.receptive_field:
-            piece = audio[:(self.receptive_field + self.window_length - 1)]
-            target = audio[:self.window_length]
+            piece = audio[:(self.receptive_field + \
+                            self.window_length - 1)]
+            target = audio[self.receptive_field : \
+                           (self.receptive_field + self.window_length)]
             sample_list.append({'audio_piece': piece,\
                               'audio_target': target})
             audio = audio[self.window_length:]
@@ -85,46 +87,18 @@ def one_hot_encode(sample_piece,
         Also a dict with the same key value as input.
         Convert torch.Tensor to one hot encoded torch tensor
     '''
-    piece = sample_piece['audio_piece'].squeeze()
-    target = sample_piece['audio_target'].squeeze()
-    piece_len = piece.size()[0]
-    piece_one_hot = np.zeros((piece_len, quantization_channels))
-    piece_one_hot[np.arange(piece_len), piece.numpy()] = 1.0
-    piece_one_hot = piece_one_hot.reshape(1,
+    batch_size, seq_len = sample_piece['audio_piece'].size()
+    piece = sample_piece['audio_piece'].view(-1)
+    target = sample_piece['audio_target'].view(-1)
+    total_len = piece.size()[0]
+    piece_one_hot = np.zeros((total_len, quantization_channels))
+    piece_one_hot[np.arange(total_len), piece.numpy()] = 1.0
+    piece_one_hot = piece_one_hot.reshape(batch_size,
                                           quantization_channels,
-                                          piece_len)
+                                          seq_len)
     piece_one_hot = torch.FloatTensor(piece_one_hot)
     if cuda_available:
         piece_one_hot = piece_one_hot.cuda()
         target = target.cuda()
     return piece_one_hot, target
 
-'''
-#following are test code to verify above code
-dataset_param = {
-    'audio_dir':'./mini_sample/',
-    'sample_rate':16000,
-    'receptive_field':4094,
-    'window_length':10000,
-    'silence_threshold':None,
-    'file_suffix':'wav',
-    'quantization_channels':256
-}
-dataloader  = audio_data_loader(batch_size = 1,
-                                shuffle = True,
-                                num_workers = 4,
-                                **dataset_param)
-
-from model import *
-net = wavenet(**params)
-net = net.cuda()
-for i, sample_batch in enumerate(dataloader):
-    for j in range(len(sample_batch)):
-        piece, _ = one_hot_encode(sample_batch[j])
-        print(piece.shape)
-        piece = piece.cuda()
-        piece = torch.autograd.Variable(piece)
-        print("output size:{}".format(net(piece).size()))
-        print("target size:{}".format(_.size()))
-        print(_)
-'''

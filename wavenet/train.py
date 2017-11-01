@@ -43,7 +43,8 @@ def save_model(model, num_iter, path):
 
 def load_model(model, path, model_name):
     checkpoint_path = path + model_name
-    print("Trying to restore saved checkpoitn from {}".format(checkpoint_path))
+    print("Trying to restore saved checkpoint from ",\
+          "{}".format(checkpoint_path))
     model_state_dict = torch.load(checkpoint_path)
     if model_state_dict:
         print("Checkpoint found, restoring!")
@@ -71,13 +72,17 @@ def train():
     Launch instances of wavenet model and dataloader.
     '''
     net = wavenet(**wavenet_params)
+    epoch_trained = 0
     if train_params["restore_model"]:
         net = load_model(net,
                          train_params["restore_dir"],
                          train_params["restore_model"])
         if net == None:
-            print("Initialize networl and train from scratch.")
+            print("Initialize network and train from scratch.")
             net = wavenet(**wavenet_params)
+        else:
+            epoch_trained = train_params["restore_model"].split('.')[0]
+            epoch_trained = int(epoch_trained[7:])
     dataloader = audio_data_loader(**dataset_params)
 
     '''
@@ -106,7 +111,8 @@ def train():
     Logging information includes one epoch's average loss
     '''
     print("Start training.")
-    print("Writing logging information to {}".format(train_params["log_dir"]))
+    print("Writing logging information to ",\
+          "{}".format(train_params["log_dir"]))
     print("Models are saved in {}".format(train_params["restore_dir"]))
 
     '''
@@ -141,7 +147,7 @@ def train():
                 loss.backward()
                 optimizer.step()
         avg_loss = total_loss / i_batch
-        line = "Average loss of epoch " + str(epoch + 1) +\
+        line = "Average loss of epoch " + str(epoch_trained + epoch + 1) +\
                " is " + str(avg_loss) + "\n"
         loss_log_file.writelines(line)
         loss_log_file.flush()
@@ -155,6 +161,8 @@ def train():
             #First whether to delete one oldest model
             if len(stored_models) == train_params["max_check_points"]:
                 def cmp(x, y):
+                    x = x.split('/')[-1]
+                    y = y.split('/')[-1]
                     x = x.split('.')[0]
                     y = y.split('.')[0]
                     x = int(x[7:])
@@ -164,8 +172,10 @@ def train():
                                        key = cmp_to_key(cmp))
                 os.remove(stored_models[0])
             #Then store the newest model
-            save_model(net, epoch + 1, train_params["restore_dir"])
-            line = "Epoch " + str(epoch + 1) + ", model saved!\n"
+            save_model(net, epoch_trained + epoch + 1,
+                       train_params["restore_dir"])
+            line = "Epoch " + str(epoch_trained + epoch + 1) + \
+                   ", model saved!\n"
             store_log_file.writelines(line)
             store_log_file.flush()
     loss_log_file.close()
