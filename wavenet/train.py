@@ -59,6 +59,8 @@ def train():
     Check whether cuda is available.
     '''
     cuda_available = torch.cuda.is_available()
+    if cuda_available:
+        torch.backends.cudnn.benchmark = True
 
     '''
     Get all needed parameters.
@@ -89,16 +91,16 @@ def train():
     Whether use gpu to train the network.
     whether use multi-gpu to train the network.
     '''
-    if cuda_available:
-        net = net.cuda()
     if cuda_available == False and train_params["device_ids"] != None:
         raise ValueError("Cuda is not avalable,"+\
                          " can not train model using multi-gpu.")
-    if train_params["device_ids"]:
-        batch_size = dataset_params["batch_size"]
-        num_gpu = len(train_params["device_ids"])
-        assert batch_size % num_gpu == 0
-        net = nn.DataParallel(net, device_ids = train_params["device_ids"])
+    if cuda_available:
+        if train_params["device_ids"]:
+            batch_size = dataset_params["batch_size"]
+            num_gpu = len(train_params["device_ids"])
+            assert batch_size % num_gpu == 0
+            net = nn.DataParallel(net,device_ids = train_params["device_ids"])
+        net = net.cuda()
 
     '''
     Start training.
@@ -123,6 +125,8 @@ def train():
                               train_params["learning_rate"],
                               train_params["momentum"])
     loss_func = nn.CrossEntropyLoss()
+    if cuda_available:
+        loss_func = loss_func.cuda()
     if not os.path.exists(train_params["log_dir"]):
         os.makedirs(train_params["log_dir"])
     if not os.path.exists(train_params["restore_dir"]):
@@ -146,6 +150,7 @@ def train():
                 total_loss += loss.data[0]
                 loss.backward()
                 optimizer.step()
+            print("Finish one song!")
         avg_loss = total_loss / i_batch
         line = "Average loss of epoch " + str(epoch_trained + epoch + 1) +\
                " is " + str(avg_loss) + "\n"

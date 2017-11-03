@@ -58,21 +58,27 @@ class audio_dataset(Dataset):
         '''
         sample_list = []
         while(len(audio)) > self.receptive_field:
-            piece = audio[:(self.receptive_field + \
-                            self.window_length - 1)]
-            target = audio[self.receptive_field : \
-                           (self.receptive_field + self.window_length)]
-            sample_list.append({'audio_piece': piece,\
-                              'audio_target': target})
-            audio = audio[self.window_length:]
+            if len(audio) >= self.receptive_field + self.window_length:
+                piece = audio[:(self.receptive_field + \
+                                self.window_length - 1)]
+                target = audio[self.receptive_field : \
+                            (self.receptive_field + self.window_length)]
+                sample_list.append({'audio_piece': piece,\
+                                'audio_target': target})
+                audio = audio[self.window_length:]
+            else:
+                piece = audio[:-1]
+                target = audio[self.receptive_field:]
+                audio = audio[self.receptive_field:]
         return sample_list
 
-def audio_data_loader(batch_size, shuffle, num_workers, **kwargs):
+def audio_data_loader(batch_size, shuffle, num_workers, pin_memory, **kwargs):
     audioDataset = audio_dataset(**kwargs)
     dataloader = DataLoader(audioDataset,
                             batch_size = batch_size,
                             shuffle = shuffle,
-                            num_workers = num_workers)
+                            num_workers = num_workers,
+                            pin_memory = pin_memory)
     return dataloader
 
 def one_hot_encode(sample_piece,
@@ -99,6 +105,6 @@ def one_hot_encode(sample_piece,
     piece_one_hot = torch.FloatTensor(piece_one_hot)
     if cuda_available:
         piece_one_hot = piece_one_hot.cuda()
-        target = target.cuda()
+        target = target.cuda(async = True)
     return piece_one_hot, target
 
