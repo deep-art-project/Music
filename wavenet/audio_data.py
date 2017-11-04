@@ -24,8 +24,8 @@ class audio_dataset(Dataset):
     def _make_audio_file_list(self):
         all_files = glob.glob(self.audio_dir + '*.' + self.file_suffix)
         if len(all_files) == 0:
-            raise ValueError('No audio file found, please check your \
-                             input directory!')
+            raise ValueError("No audio file found, please check your ",\
+                             "input directory!")
         file_list = []
         for item in all_files:
             item = item.split('/')[-1]
@@ -104,7 +104,7 @@ def one_hot_encode(sample_piece,
                                           seq_len)
     piece_one_hot = torch.FloatTensor(piece_one_hot)
     if cuda_available:
-        piece_one_hot = piece_one_hot.cuda()
-        target = target.cuda(async = True)
+        piece_one_hot = piece_one_hot.cuda(async=True)
+        target = target.cuda(async=True)
     return piece_one_hot, target
 

@@ -1,12 +1,12 @@
 {
-    "batch_size":1,
+    "batch_size":2,
     "shuffle":true,
     "num_workers":4,
     "pin_memory":true,
-    "audio_dir":"/home/zhaoyuekai/deep_art_proj/piano_pieces/",
+    "audio_dir":"/data/zyj/piano_pieces/",
     "sample_rate":16000,
     "receptive_field":4094,
-    "window_length":10000,
+    "window_length":32000,
     "silence_threshold":null,
     "file_suffix":"wav",
     "quantization_channels":256

@@ -1,4 +1,4 @@
-from audio_data import audio_data_loader, one_hot_encode
+from faster_audio_data import audio_data_loader, one_hot_encode
 from functools import cmp_to_key
 from model import wavenet
 from torch.autograd import Variable
@@ -140,17 +140,18 @@ def train():
     for epoch in range(train_params["num_epochs"]):
         total_loss = 0.0
         for i_batch, sampled_batch in enumerate(dataloader):
-            for j in range(len(sampled_batch)):
-                optimizer.zero_grad()
-                piece, target = one_hot_encode(sampled_batch[j],
-                                               cuda_available)
-                piece, target = Variable(piece), Variable(target)
-                logits = net(piece)
-                loss = loss_func(logits, target)
-                total_loss += loss.data[0]
-                loss.backward()
-                optimizer.step()
-            print("Finish one song!")
+            optimizer.zero_grad()
+            piece, target = sampled_batch["audio_piece"],\
+                            sampled_batch["audio_target"]
+            if cuda_available:
+                piece = piece.cuda(async=True)
+                target = target.cuda(async=True)
+            piece, target = Variable(piece), Variable(target.view(-1))
+            logits = net(piece)
+            loss = loss_func(logits, target)
+            total_loss += loss.data[0]
+            loss.backward()
+            optimizer.step()
         avg_loss = total_loss / i_batch
         line = "Average loss of epoch " + str(epoch_trained + epoch + 1) +\
                " is " + str(avg_loss) + "\n"
