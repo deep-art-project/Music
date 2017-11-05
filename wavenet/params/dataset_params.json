@@ -1,14 +1,12 @@
 {
-    "batch_size":2,
+    "batch_size":6,
     "shuffle":true,
-    "num_workers":4,
+    "num_workers":12,
     "pin_memory":true,
-    "audio_dir":"/data/zyj/piano_pieces/",
-    "sample_rate":16000,
+    "audio_path":"/data/zyj/piano_pieces/np_audio.pkl",
     "receptive_field":4094,
-    "window_length":32000,
-    "silence_threshold":null,
-    "file_suffix":"wav",
+    "window_length":40000,
+    "cuda_available":true,
     "quantization_channels":256
 }
 
