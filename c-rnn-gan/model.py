@@ -20,7 +20,7 @@ class Discriminator(nn.Module):
         pass
 
 
-class Midinet(nn.Module):
+class CRnnGan(nn.Module):
 
     def __init__(self, **kwargs):
         pass
