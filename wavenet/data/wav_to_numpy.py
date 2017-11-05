@@ -10,7 +10,7 @@ def mu_law_encode(audio, quantization_channels = 256):
         audio: type(np.array), size(sequence_length)
         quantization_channels: as the name describes
     Input:
-        np.array of shape(sequence length)
+        np.array of shape(sequence_length)
     Return:
         np.array with each element ranging from 0 to 255
         The size of return array is the same as input tensor
