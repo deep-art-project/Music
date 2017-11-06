@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 
-class Midi_Dataset(Dataset):
+class CRnnGan_Dataset(Dataset):
 
     def __init__(self, **kwargs):
         pass
