@@ -1,7 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class wavenet(nn.Module):
+
     def __init__(self,
                  filter_width,
                  dilations,
@@ -44,7 +46,7 @@ class wavenet(nn.Module):
         self.causal_layer = nn.Conv1d(self.quantization_channels,
                                       self.residual_channels,
                                       self.filter_width,
-                                      bias = self.use_bias)
+                                      bias=self.use_bias)
 
     def _init_dliation_layer(self):
         self.dilation_layer_stack = nn.ModuleList()
@@ -53,32 +55,32 @@ class wavenet(nn.Module):
             current['filter'] = nn.Conv1d(self.residual_channels,
                                           self.dilation_channels,
                                           self.filter_width,
-                                          dilation = dilation,
-                                          bias = self.use_bias)
+                                          dilation=dilation,
+                                          bias=self.use_bias)
             current['gate'] = nn.Conv1d(self.residual_channels,
                                         self.dilation_channels,
                                         self.filter_width,
-                                        dilation = dilation,
-                                        bias = self.use_bias)
+                                        dilation=dilation,
+                                        bias=self.use_bias)
             current['dense'] = nn.Conv1d(self.dilation_channels,
                                          self.residual_channels,
                                          1,
-                                         bias = self.use_bias)
+                                         bias=self.use_bias)
             current['skip'] = nn.Conv1d(self.dilation_channels,
                                         self.skip_channels,
                                         1,
-                                        bias = self.use_bias)
+                                        bias=self.use_bias)
             self.dilation_layer_stack.extend(list(current.values()))
 
     def _init_post_processing_layer(self):
         self.post_process_1 = nn.Conv1d(self.skip_channels,
-                                      self.skip_channels,
-                                      1,
-                                      bias = self.use_bias)
+                                        self.skip_channels,
+                                        1,
+                                        bias=self.use_bias)
         self.post_process_2 = nn.Conv1d(self.skip_channels,
                                         self.quantization_channels,
                                         1,
-                                        bias = self.use_bias)
+                                        bias=self.use_bias)
 
     def forward(self, wave_sample):
         '''
@@ -97,14 +99,14 @@ class wavenet(nn.Module):
         if output_width <= 0:
             raise ValueError("wave sample not long enough")
 
-        #First, pass through a causal convolution layer
+        # First, pass through a causal convolution layer
         current_out = self.causal_layer(wave_sample)
 
-        #Then pass through all dilation convolution layers
+        # Then pass through all dilation convolution layers
         skip_contribution_stack = []
         for i, dilation in enumerate(self.dilations):
-            #calculate the output of a dilation layer
-            #with residual connection
+            # calculate the output of a dilation layer
+            # with residual connection
             current_in = current_out
             j = 4 * i
             filter_layer, gate_layer, dense_layer, skip_layer = \
@@ -120,28 +122,29 @@ class wavenet(nn.Module):
             current_in_sliced = current_in[:, :, -current_len:]
             current_out = current_dense + current_in_sliced
 
-            #Then calculate the skip contributions to form the prediction
+            # Then calculate the skip contributions to form the prediction
             skip = combined[:, :, -output_width:]
             skip = skip_layer(skip)
             skip_contribution_stack.append(skip)
 
-        #calculate the final prediction
-        #first take the sum of all skip contributions
-        #then use two relu activations as two 1*1 convolution
+        # calculate the final prediction
+        # first take the sum of all skip contributions
+        # then use two relu activations as two 1*1 convolution
         total = sum(skip_contribution_stack)
         total = F.relu(total)
         total = self.post_process_1(total)
         total = F.relu(total)
         total = self.post_process_2(total)
 
-        #Finally, for each row in total, perform a softmax
-        #to get probability
+        # Finally, for each row in total, perform a softmax
+        # to get probability
         batch_size, channels, seq_len = total.size()
         total = total.view(-1, self.quantization_channels)
         total = self.softmax(total)
         return total
 
-def predict_next(model, wave_var, quantization_channels = 256):
+
+def predict_next(model, wave_var, quantization_channels=256):
     '''
     Arguments:
         model: a pretrained wavenet model
@@ -158,5 +161,3 @@ def predict_next(model, wave_var, quantization_channels = 256):
     last = out[-1, :]
     last = last.view(-1)
     return last
-
-

@@ -1,7 +1,7 @@
 {
-    "batch_size":6,
+    "batch_size":4,
     "shuffle":true,
-    "num_workers":12,
+    "num_workers":8,
     "pin_memory":true,
     "audio_path":"/data/zyj/piano_pieces/np_audio.pkl",
     "receptive_field":4094,

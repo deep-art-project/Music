@@ -1,4 +1,4 @@
-from faster_audio_data import audio_data_loader, one_hot_encode
+from faster_audio_data import audio_data_loader
 from functools import cmp_to_key
 from model import wavenet
 from torch.autograd import Variable
@@ -9,11 +9,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+
 def get_params(json_dir):
     with open(json_dir, 'r') as f:
         params = json.load(f)
     f.close()
     return params
+
 
 def get_arguments():
     train_params = get_params('./params/train_params.json')
@@ -21,18 +23,23 @@ def get_arguments():
     dataset_params = get_params('./params/dataset_params.json')
     return train_params, wavenet_params, dataset_params
 
+
 def get_optimizer(model, optimizer_type, learning_rate, momentum):
     if optimizer_type == 'sgd':
-        return optim.SGD(model.parameters(),
-                         lr = learning_rate,
-                         momentum = momentum)
+        return optim.SGD(
+            model.parameters(), lr=learning_rate, momentum=momentum
+        )
+
     if optimizer_type == 'rmsprop':
-        return optim.RMSprop(model.parameters(),
-                            lr = learning_rate,
-                            momentum = momentum)
+        return optim.RMSprop(
+            model.parameters(), lr=learning_rate, momentum=momentum
+        )
+
     if optimizer_type == 'adam':
-        return optim.Adam(model.parameters(),
-                          lr = learning_rate)
+        return optim.Adam(
+            model.parameters(), lr=learning_rate
+        )
+
 
 def save_model(model, num_iter, path):
     model_name = "wavenet" + str(num_iter) + ".model"
@@ -41,9 +48,10 @@ def save_model(model, num_iter, path):
     torch.save(model.state_dict(), checkpoint_path)
     print("Done!")
 
+
 def load_model(model, path, model_name):
     checkpoint_path = path + model_name
-    print("Trying to restore saved checkpoint from ",\
+    print("Trying to restore saved checkpoint from ",
           "{}".format(checkpoint_path))
     model_state_dict = torch.load(checkpoint_path)
     if model_state_dict:
@@ -53,6 +61,7 @@ def load_model(model, path, model_name):
     else:
         print("No checkpoint found!")
         return None
+
 
 def train():
     '''
@@ -79,7 +88,7 @@ def train():
         net = load_model(net,
                          train_params["restore_dir"],
                          train_params["restore_model"])
-        if net == None:
+        if net is None:
             print("Initialize network and train from scratch.")
             net = wavenet(**wavenet_params)
         else:
@@ -91,15 +100,15 @@ def train():
     Whether use gpu to train the network.
     whether use multi-gpu to train the network.
     '''
-    if cuda_available is False and train_params["device_ids"] != None:
-        raise ValueError("Cuda is not avalable,"+\
+    if cuda_available is False and train_params["device_ids"] is not None:
+        raise ValueError("Cuda is not avalable,",
                          " can not train model using multi-gpu.")
     if cuda_available:
         if train_params["device_ids"]:
             batch_size = dataset_params["batch_size"]
             num_gpu = len(train_params["device_ids"])
             assert batch_size % num_gpu == 0
-            net = nn.DataParallel(net, device_ids = train_params["device_ids"])
+            net = nn.DataParallel(net, device_ids=train_params["device_ids"])
         net = net.cuda()
 
     '''
@@ -113,7 +122,7 @@ def train():
     Logging information includes one epoch's average loss
     '''
     print("Start training.")
-    print("Writing logging information to ",\
+    print("Writing logging information to ",
           "{}".format(train_params["log_dir"]))
     print("Models are saved in {}".format(train_params["restore_dir"]))
 
@@ -137,12 +146,13 @@ def train():
     '''
     Train in epochs
     '''
+    total_loss = 0.0
+    num_trained = 0
     for epoch in range(train_params["num_epochs"]):
-        total_loss = 0.0
         for i_batch, sampled_batch in enumerate(dataloader):
             optimizer.zero_grad()
-            piece, target = sampled_batch["audio_piece"],\
-                            sampled_batch["audio_target"]
+            piece = sampled_batch["audio_piece"]
+            target = sampled_batch["audio_target"]
             if cuda_available:
                 piece = piece.cuda(async=True)
                 target = target.cuda(async=True)
@@ -152,19 +162,25 @@ def train():
             total_loss += loss.data[0]
             loss.backward()
             optimizer.step()
-        avg_loss = total_loss / i_batch
-        line = "Average loss of epoch " + str(epoch_trained + epoch + 1) +\
-               " is " + str(avg_loss) + "\n"
-        loss_log_file.writelines(line)
-        loss_log_file.flush()
+            '''
+            check whether to write loss information to log file
+            '''
+            num_trained += 1
+            if num_trained % train_params["print_every"] == 0:
+                avg_loss = total_loss / train_params["print_every"]
+                line = "Trained over " + str(num_trained) + " pieces,"
+                line += "Average loss is " + str(avg_loss) + "\n"
+                loss_log_file.writelines(line)
+                loss_log_file.flush()
+                total_loss = 0.0
 
         '''
         Store model per check_point_every epochs.
         '''
         if (epoch + 1) % train_params["check_point_every"] == 0:
-            stored_models = glob.glob(train_params["restore_dir"] +\
+            stored_models = glob.glob(train_params["restore_dir"] +
                                       "*.model")
-            #First whether to delete one oldest model
+            # First whether to delete one oldest model
             if len(stored_models) == train_params["max_check_points"]:
                 def cmp(x, y):
                     x = x.split('/')[-1]
@@ -175,9 +191,9 @@ def train():
                     y = int(y[7:])
                     return x - y
                 stored_models = sorted(stored_models,
-                                       key = cmp_to_key(cmp))
+                                       key=cmp_to_key(cmp))
                 os.remove(stored_models[0])
-            #Then store the newest model
+            # Then store the newest model
             save_model(net, epoch_trained + epoch + 1,
                        train_params["restore_dir"])
             line = "Epoch " + str(epoch_trained + epoch + 1) + \
@@ -186,6 +202,7 @@ def train():
             store_log_file.flush()
     loss_log_file.close()
     store_log_file.close()
+
 
 if __name__ == '__main__':
     train()
