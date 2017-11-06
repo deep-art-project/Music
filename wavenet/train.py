@@ -140,14 +140,22 @@ def train():
         os.makedirs(train_params["log_dir"])
     if not os.path.exists(train_params["restore_dir"]):
         os.makedirs(train_params["restore_dir"])
-    loss_log_file = open(train_params["log_dir"]+'loss_log.log', 'w')
-    store_log_file = open(train_params["log_dir"]+'store_log.log', 'w')
+    loss_log_file = open(train_params["log_dir"]+'loss_log.log', 'a')
+    store_log_file = open(train_params["log_dir"]+'store_log.log', 'a')
 
     '''
     Train in epochs
     '''
     total_loss = 0.0
-    num_trained = 0
+    with open(train_params["log_dir"] + 'loss_log.log', 'r') as f:
+        lines = f.readlines()
+        if len(lines) > 0:
+            num_trained = lines[-1].split(' ')[2]
+            num_trained = int(num_trained)
+        else:
+            num_trained = 0
+    f.close()
+
     for epoch in range(train_params["num_epochs"]):
         for i_batch, sampled_batch in enumerate(dataloader):
             optimizer.zero_grad()
