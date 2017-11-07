@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from faster_audio_data import audio_data_loader
 from functools import cmp_to_key
 from model import wavenet
@@ -53,10 +54,16 @@ def load_model(model, path, model_name):
     checkpoint_path = path + model_name
     print("Trying to restore saved checkpoint from ",
           "{}".format(checkpoint_path))
-    model_state_dict = torch.load(checkpoint_path)
-    if model_state_dict:
+    if os.path.exists(checkpoint_path):
         print("Checkpoint found, restoring!")
-        model.load_state_dict(model_state_dict)
+        # Create a new state dict to prevent error when storing a model
+        # on one device and restore it from another
+        state_dict = torch.load(checkpoint_path)
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]
+            new_state_dict[name] = v
+        model.load_state_dict(new_state_dict)
         return model
     else:
         print("No checkpoint found!")

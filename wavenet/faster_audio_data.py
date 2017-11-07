@@ -50,6 +50,7 @@ class audio_dataset(Dataset):
 
 def audio_data_loader(batch_size, shuffle, num_workers, pin_memory, **kwargs):
     audioDataset = audio_dataset(**kwargs)
+    print("{} pieces in total".format(len(audioDataset)))
     dataloader = DataLoader(audioDataset,
                             batch_size=batch_size,
                             shuffle=shuffle,

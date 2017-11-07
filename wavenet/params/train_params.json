@@ -1,14 +1,14 @@
 {
     "log_dir":"./log/",
     "restore_dir":"./restore/",
-    "restore_model":null,
+    "restore_model":"wavenet1.model",
     "check_point_every":1,
     "print_every":100,
-    "num_epochs":10,
+    "num_epochs":2,
     "wavenet_params":"./wavenet_params.json",
     "optimizer":"adam",
     "max_check_points":10,
-    "learning_rate":1e-3,
+    "learning_rate":1e-4,
     "momentum":0.9,
     "device_ids":[0,1]
 }
