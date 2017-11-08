@@ -1,10 +1,11 @@
 from audio_func import mu_law_decode
 from collections import OrderedDict
 from model import wavenet
-from torch.autpgrad import Variable
+from torch.autograd import Variable
 from train import load_model
 import json
 import librosa
+import os
 import torch
 import torch.nn.functional as F
 
@@ -29,11 +30,21 @@ def predict_next(net, note, state_queue=None):
         assert note.size()[2] == net.receptive_field
         state_queue = OrderedDict()
         current_out = net.causal_layer(note)
-        state_queue['causal_layer'] = note[:, :, -1]
+        state_queue['causal_layer'] = note[:, :, -1].contiguous()
+        state_queue['causal_layer'] = state_queue['causal_layer'].view(
+            1,
+            net.quantization_channels,
+            1
+        )
         skip_contribution_stack = []
         for i, dilation in enumerate(net.dilations):
             layer_name = 'block_' + str(i + 1)
-            state_queue[layer_name] = current_out[:, :, -dilation:]
+            state_queue[layer_name] = current_out[:, :, -dilation:].contiguous()
+            state_queue[layer_name] = state_queue[layer_name].view(
+                1,
+                net.residual_channels,
+                dilation
+            )
             current_in = current_out
             j = 4 * i
             filter_layer, gate_layer, dense_layer, skip_layer = \
@@ -61,7 +72,7 @@ def predict_next(net, note, state_queue=None):
             batch_size, channels, seq_len = state.size()
             layer_input = torch.ones(batch_size, channels, seq_len + 1)
             layer_input[:, :, :-1] = state.data
-            layer_input[:, :, -1] = note
+            layer_input[:, :, -1] = note.data
             layer_input = Variable(layer_input)
             if layer_type == 'causal':
                 layer = layer_list[0]
@@ -87,8 +98,9 @@ def predict_next(net, note, state_queue=None):
         '''
         def one_layer_update(state, note):
             new_state = torch.ones(state.size())
-            new_state[:, :, :-1] = state[:, :, 1:]
-            new_state[:, :, -1] = note
+            if state.size()[2] > 1:
+                new_state[:, :, :-1] = state.data[:, :, 1:]
+            new_state[:, :, -1] = note.data
             return Variable(new_state)
 
 
@@ -97,7 +109,10 @@ def predict_next(net, note, state_queue=None):
         same time.
         '''
         causal_state = state_queue['causal_layer']
-        note_out = one_layer_forward(causal_state, note, [net.causal_layer])
+        layer_list = [net.causal_layer]
+        note_out = one_layer_forward(causal_state,
+                                     note,
+                                     layer_list)
         state_queue['causal_layer'] = one_layer_update(causal_state, note)
         skip_contribution_stack = []
         for i, dilation in enumerate(net.dilations):
@@ -122,16 +137,19 @@ def predict_next(net, note, state_queue=None):
     # to get probability
     total = total.view(-1, net.quantization_channels)
     total = net.softmax(total).view(-1)
-    _, predict = torch.topk(total.data)
+    _, predict = torch.topk(total.data, 1)
     return predict, state_queue
 
 
 def generate(model_path,
              model_name,
              generate_path,
+             generate_name,
              start_piece=None,
              sr=16000,
              duration=10):
+    if os.path.exists(generate_path)is False:
+        os.makedirs(generate_path)
     with open('./params/wavenet_params.json', 'r') as f:
         params = json.load(f)
     f.close()
@@ -147,12 +165,22 @@ def generate(model_path,
     generated_piece = []
     for i in range(note_num):
         note, state_queue = predict_next(net, note, state_queue)
+        note = note[0]
         generated_piece.append(note)
         temp = torch.zeros(1, net.quantization_channels, 1)
         temp[:, note, :] = 1.0
-        note = temp
+        note = Variable(temp)
+    print(generated_piece)
     generated_piece = torch.LongTensor(generated_piece)
     generated_piece = mu_law_decode(generated_piece,
                                     net.quantization_channels)
     generated_piece = generated_piece.numpy()
-    librosa.output.write_wav(generate_path, generated_piece, sr=sr)
+    wav_name = generate_path + generate_name
+    librosa.output.write_wav(wav_name, generated_piece, sr=sr)
+
+
+generate('./restore/',
+         'wavenet14.model',
+         './gen/',
+         'test.wav',
+         duration=10)
