@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
 
 class wavenet(nn.Module):
@@ -160,4 +161,5 @@ def predict_next(model, wave_var, quantization_channels=256):
     out = raw_out.view(-1, quantization_channels)
     last = out[-1, :]
     last = last.view(-1)
-    return last
+    _, predict = torch.topk(last, 1)
+    return predict

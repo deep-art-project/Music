@@ -59,11 +59,14 @@ def load_model(model, path, model_name):
         # Create a new state dict to prevent error when storing a model
         # on one device and restore it from another
         state_dict = torch.load(checkpoint_path)
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]
-            new_state_dict[name] = v
-        model.load_state_dict(new_state_dict)
+        keys = list(state_dict.keys())
+        if keys[0][:6] == 'module':
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k[7:]
+                new_state_dict[name] = v
+            state_dict = new_state_dict
+        model.load_state_dict(state_dict)
         return model
     else:
         print("No checkpoint found!")
