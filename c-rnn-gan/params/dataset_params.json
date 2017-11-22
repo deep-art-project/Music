@@ -1,0 +1,10 @@
+{
+    "batch_size":4,
+    "shuffle":true,
+    "num_workers":2,
+    "pin_memory":false,
+    "root_dir":"/home/zhaoyuekai/deep_art_proj/raw_midi/",
+    "song_length":100,
+    "percentage":1.0,
+    "output_ticks_per_quarter_note":384
+}
