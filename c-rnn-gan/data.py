@@ -7,7 +7,7 @@ import torch
 
 
 BEGIN_TICK = 0
-LENGTH= 1
+LENGTH = 1
 FREQ = 2
 VELOCITY = 3
 NUM_SONG_FEATURES = 4
@@ -69,11 +69,11 @@ class CRnnGan_Dataset(Dataset):
         composer_list = []
         if os.path.exists(self.root_dir) is False:
             raise ("Root midi directory doesn't exist!")
-        genres = os.listdir(os.path.join(self.root_dir))
+        genres = self.list_all_dir(os.path.join(self.root_dir))
         genre_list.extend(genres)
         for genre in genres:
             genre_dir = os.path.join(self.root_dir, genre)
-            composers = os.listdir(genre_dir)
+            composers = self.list_all_dir(genre_dir)
             composer_list.extend(composers)
             for composer in composers:
                 composer_dir = os.path.join(genre_dir, composer)
@@ -82,6 +82,10 @@ class CRnnGan_Dataset(Dataset):
                     song_path = os.path.join(composer_dir, song)
                     filelist.append(song_path)
         return filelist, genre_list, composer_list
+
+    def list_all_dir(self, path):
+        dirs = os.listdir(path)
+        return [dir for dir in dirs if not dir.startswith('.')]
 
     def __len__(self):
         return int(self.percentage * len(self.filelist))

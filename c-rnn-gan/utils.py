@@ -11,6 +11,7 @@ def tone_to_freq(tone):
   """
   return math.pow(2, (tone - 69.0) / 12.0) * 440.0
 
+
 def freq_to_tone(freq):
     '''
     Inverse transform of tone_to_freq
