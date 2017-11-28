@@ -1,0 +1,13 @@
+{
+  "generator_params":{
+    "num_feature": 4,
+    "rand_feature_dim": 100,
+    "num_hidden": 350,
+    "keep_prob": 0.5
+  },
+
+  "discriminator_params":{
+    "num_hidden": 350,
+    "keep_prob": 0.5
+  }
+}
