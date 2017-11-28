@@ -131,9 +131,9 @@ class Discriminator(CRnnGan):
         self.fc = nn.Linear(self.lstm_d.out_features, 1)
 
     def forward(self, inputs):
-        out, self.hidden = self.lstm_d(inputs, self.hidden)
-        # TODO: view
-        decision = nn.Softmax(self.fc(out))
-        return decision, out
+        outs, self.hidden = self.lstm_d(inputs, self.hidden)
+        outs = outs.permute(1, 0, 2).view(outs.size()[1], -1)
+        decisions = [nn.Softmax(self.fc(out)) for out in outs]
+        return decisions, outs
 
 
