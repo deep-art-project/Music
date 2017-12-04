@@ -121,6 +121,7 @@ class Disciminator(nn.Module):
         score = self.fc(feature)
         pred = F.softmax(score)
         return {"pred":pred, "feature":feature, "score":score}
+    
     def l2_loss(self):
         W = self.fc.weight
         b = self.fc.bias
