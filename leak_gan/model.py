@@ -1,7 +1,18 @@
 from scipy.stats import truncnorm
+from torch.autograd import Variable
+from torch.distributions import Categorical
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+
+def truncated_normal(shape, lower=-0.2, upper=0.2):
+    size = 1
+    for dim in shape:
+        size *= dim
+    w_truncated = truncnorm.rvs(lower, upper, size=size)
+    w_truncated = torch.from_numpy(w_truncated).float()
+    w_truncated = w_truncated.view(shape)
+    return w_truncated
 
 class Highway(nn.Module):
 
@@ -47,19 +58,10 @@ class Disciminator(nn.Module):
         self._init_embedding()
         self._init_feature_extractor()
         self.fc = nn.Linear(self.num_filters_total, self.num_classes)
-        self.fc.weight.data = self.truncated_normal(
+        self.fc.weight.data = truncated_normal(
             self.fc.weight.data.shape
         )
         nn.init.constant(self.fc.bias, 0.1)
-
-    def truncated_normal(self, shape, lower=-0.2, upper=0.2):
-        size = 1
-        for dim in shape:
-            size *= dim
-        w_truncated = truncnorm.rvs(lower, upper, size=size)
-        w_truncated = torch.from_numpy(w_truncated).float()
-        w_truncated = w_truncated.view(shape)
-        return w_truncated
 
     def _init_embedding(self):
         self.embed = nn.Embedding(self.vocab_size + 1, self.dis_emb_dim)
@@ -77,7 +79,7 @@ class Disciminator(nn.Module):
             '''
             Initialize conv extractor's weight with truncated normal
             '''
-            current_conv.weight.data = self.truncated_normal(
+            current_conv.weight.data = truncated_normal(
                 current_conv.weight.data.shape
             )
 
@@ -127,3 +129,114 @@ class Disciminator(nn.Module):
         l2_loss = torch.sum(W * W) + torch.sum(b * b)
         l2_loss = self.l2_reg_lambda * l2_loss
         return l2_loss
+
+class Manager(nn.Module):
+
+    def __init__(self, batch_size, hidden_dim, goal_out_size):
+        super(Manager, self).__init__()
+        self.batch_size = batch_size
+        self.hidden_dim = hidden_dim
+        self.goal_out_size = goal_out_size
+        self.recurrent_unit = nn.LSTMCell(
+            self.goal_out_size,
+            self.hidden_dim
+        )
+        self.fc = nn.Linear(
+            self.hidden_dim,
+            self.goal_out_size
+        )
+        self.goal_init = nn.Parameter(torch.zeros(
+            self.batch_size, self.goal_out_size
+        ))
+        self._init_params()
+
+    def _init_params(self):
+        for param in self.parameters():
+            nn.init.normal(std=0.1)
+        self.goal_init.data = truncated_normal(
+            self.goal_init.data.shape
+            )
+
+    def forward(self, f_t, h_m_t, c_m_t):
+        h_m_tp1, c_m_tp1 = self.recurrent_unit(f_t, (h_m_t, c_m_t))
+        sub_goal = self.fc(h_m_tp1)
+        sub_goal = torch.renorm(sub_goal, 2, 0, 1.0)
+        return sub_goal, h_m_tp1, c_m_tp1
+
+class Worker(nn.Module):
+
+    def __init__(self,
+                 batch_size,
+                 vocab_size,
+                 embed_dim,
+                 hidden_dim,
+                 goal_out_size,
+                 goal_size):
+        super(Worker, self).__init__()
+        self.batch_size = batch_size
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.hidden_dim = hidden_dim
+        self.goal_out_size = goal_out_size
+        self.goal_size = goal_size
+        self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
+        self.recurrent_unit = nn.LSTMCell(self.embed_dim, self.hidden_dim)
+        self.fc = nn.Linear(self.hidden_dim, self.goal_size)
+        self.goal_change = nn.Parameter(torch.zeros(
+            self.goal_out_size, self.goal_size
+        ))
+        self._init_params()
+
+    def _init_params(self):
+        for param in self.parameters():
+            nn.init.normal(param, std=0.1)
+
+    def forward(self, x_t, h_w_t, c_w_t):
+        x_t_embeded = self.embedding(x_t) # batch_size * embed_dim
+        h_w_tp1, c_w_tp1 = self.recurrent_unit(x_t_embeded, (h_w_t, c_w_t))
+        O_tp1 = self.fc(h_w_tp1)
+        O_tp1 = O_tp1.view(
+            self.batch_size, self.vocab_size, self.goal_size
+        )
+        return O_tp1, h_w_tp1, c_w_tp1
+
+class Generator(nn.Module):
+
+    def __init__(self, args_dict, step_size):
+        super(self, Generator).__init__()
+        manager_args = args_dict["manager"]
+        worker_args = args_dict["worker"]
+        self.step_size = step_size
+        self.worker = Worker(**worker_args)
+        self.manager = Manager(*manager_args)
+
+    def init_hidden(self):
+        h = Variable(torch.zeros(
+            self.worker.batch_size, self.worker.hidden_dim
+        ))
+
+        c = Variable(torch.zeros(
+            self.worker.batch_size, self.worker.hidden_dim
+        ))
+        return (h, c)
+
+    def forward(self, x_t, f_t, h_m_t, c_m_t, h_w_t, c_w_t,
+                last_goal, real_goal, t):
+        sub_goal, h_m_tp1, c_m_tp1 = self.manager(f_t, h_m_t, c_m_t)
+        O, h_w_tp1, c_w_tp1 = self.worker(x_t, h_w_t, c_w_t)
+        last_goal_temp = last_goal + sub_goal
+        w_t = torch.matmul(
+            real_goal, self.worker.goal_change
+        )
+        w_t = torch.renorm(w_t, 2, 0, 1.0)
+        w_t = torch.unsqueeze(w_t, -1)
+        logits = torch.squeeze(torch.matmul(O, w_t))
+        probs = F.softmax(logits, dim=1)
+        x_tp1 = Categorical(probs).sample()
+        if (t + 1) % self.step_size == 0:
+            return x_tp1, h_m_tp1, c_m_tp1, h_w_tp1, c_w_tp1,\
+                   Variable(torch.zeros(self.batch_size, self.goal_out_size)),\
+                   last_goal_temp, t + 1
+        else:
+            return x_tp1, h_m_tp1, c_m_tp1, h_w_tp1, c_w_tp1,\
+                   last_goal_temp, real_goal, t + 1
