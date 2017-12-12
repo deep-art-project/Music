@@ -36,6 +36,10 @@ def recurrent_func(f_type='pre'):
             '''
             generator = model_dict['generator']
             discriminator = model_dict['discriminator']
+
+            '''
+            Initialize variables and lists for forward step.
+            '''
             h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t = \
                 init_vars(generator,discriminator, use_cuda)
             t = 0
@@ -47,6 +51,11 @@ def recurrent_func(f_type='pre'):
             seq_len = discriminator.seq_len
             step_size = generator.step_size
             goal_out_size = generator.worker.goal_out_size
+
+            '''
+            Perform forward step for pretraining generator and
+            dicriminator.
+            '''
             while t < discriminator.seq_len + 1 :
                 '''
                 Extract feature f_t.
@@ -64,6 +73,7 @@ def recurrent_func(f_type='pre'):
                 if use_cuda:
                     cur_sen = cur_sen.cuda(async=True)
                 f_t = discriminator(cur_sen)["feature"]
+
                 '''
                 Generator forward step.
                 '''
@@ -80,6 +90,7 @@ def recurrent_func(f_type='pre'):
                     if use_cuda:
                         last_goal = last_goal.cuda(async=True)
                     real_goal_list.append(real_goal)
+
                 '''
                 Store needed information for caculating loss function
                 '''
@@ -90,6 +101,10 @@ def recurrent_func(f_type='pre'):
                         delta_feature_list.append(
                             f_t - feature_list[t - step_size]
                         )
+
+            '''
+            Post process and return variables needed for calculating loss.
+            '''
             if len(real_goal_list) == len(delta_feature_list) + 1:
                 real_goal_list = real_goal_list[:-1]
             prediction_list = prediction_list[:-1]
