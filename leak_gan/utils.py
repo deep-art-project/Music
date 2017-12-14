@@ -232,7 +232,100 @@ def recurrent_func(f_type='pre'):
             return rets
 
     elif f_type == 'rollout':
-        pass
+        def func(model_dict, input_x, given_num, use_cuda=False,
+                 temperature=1.0):
+            '''
+            Get generator and discriminator
+            '''
+            generator = model_dict['generator']
+            discriminator = model_dict['discriminator']
+
+            '''
+            Initialize variables and lists for forward step.
+            '''
+            h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t = \
+                init_vars(generator, discriminator, use_cuda)
+            t = 0
+            gen_token_list = []
+            batch_size = generator.worker.batch_size
+            seq_len = discriminator.seq_len
+            step_size = generator.step_size
+            goal_out_size = generator.worker.goal_out_size
+
+            '''
+            Use input_x to perform generator forward step.
+            '''
+            while t < given_num + 1:
+                '''
+                Extract feature f_t.
+                '''
+                if t == 0:
+                    cur_sen = Variable(nn.init.constant(
+                        torch.zeros(batch_size, seq_len), -1)
+                    ).long()
+                    if use_cuda:
+                        cur_sen = cur_sen.cuda(async=True)
+                else:
+                    cur_sen = torch.stack(gen_token_list).permute(1, 0)
+                    cur_sen = F.pad(
+                        cur_sen, (0, seq_len - t), value=-1
+                    )
+                f_t = discriminator(cur_sen)["feature"]
+
+                '''
+                Generator forward step.
+                '''
+                x_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal, real_goal,\
+                sub_goal, probs, t_ = generator(
+                        x_t, f_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal,
+                        real_goal, t, temperature
+                    )
+                if t % step_size == 0:
+                    real_goal = last_goal
+                    last_goal = Variable(torch.zeros(
+                        batch_size, goal_out_size
+                    ))
+                    if use_cuda:
+                        last_goal = last_goal.cuda(async=True)
+                if t > 0:
+                    gen_token_list.append(
+                        input_x[:, t - 1]
+                    )
+                t = t_
+
+            '''
+            Perform rollout.
+            '''
+            while t < seq_len + 1:
+
+                '''
+                Extract feature f_t.
+                '''
+                cur_sen = torch.stack(gen_token_list).permute(1, 0)
+                cur_sen = F.pad(
+                    cur_sen, (0, seq_len - t), value=-1
+                )
+                f_t = discriminator(cur_sen)["feature"]
+
+                '''
+                Generator forward step.
+                '''
+                x_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal, real_goal,\
+                sub_goal, probs, t_ = generator(
+                        x_t, f_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal,
+                        real_goal, t, temperature
+                    )
+                if t % step_size == 0:
+                    real_goal = last_goal
+                    last_goal = Variable(torch.zeros(
+                        batch_size, goal_out_size
+                    ))
+                    if use_cuda:
+                        last_goal = last_goal.cuda(async=True)
+                gen_token_list.append(x_t)
+                t = t_
+            gen_token = torch.stack(gen_token_list).permute(1, 0)
+            return gen_token
 
     else:
         raise ("Invalid function type!")
