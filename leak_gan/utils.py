@@ -1,4 +1,6 @@
+from scipy.special import expit
 from torch.autograd import Variable
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -54,7 +56,7 @@ def recurrent_func(f_type='pre'):
 
             '''
             Perform forward step for pretraining generator and
-            dicriminator.
+            discriminator.
             '''
             while t < seq_len + 1 :
                 '''
@@ -83,7 +85,8 @@ def recurrent_func(f_type='pre'):
                         real_goal, t, 1.0
                     )
                 if t % step_size == 0:
-                    real_goal = last_goal
+                    if t > 0:
+                        real_goal = last_goal
                     last_goal = Variable(torch.zeros(
                         batch_size, goal_out_size
                     ))
@@ -175,7 +178,8 @@ def recurrent_func(f_type='pre'):
                         real_goal, t, temperature
                     )
                 if t % step_size == 0:
-                    real_goal = last_goal
+                    if t > 0:
+                        real_goal = last_goal
                     last_goal = Variable(torch.zeros(
                         batch_size, goal_out_size
                     ))
@@ -184,7 +188,7 @@ def recurrent_func(f_type='pre'):
                     real_goal_list.append(real_goal)
 
                 '''
-                Store needed information for caculating loss function
+                Store needed information for calculating loss function
                 '''
                 feature_list.append(f_t)
                 prediction_list.append(probs)
@@ -198,7 +202,7 @@ def recurrent_func(f_type='pre'):
                         )
                     else:
                         delta_feature_for_worker_list.append(
-                            f_t - feature_list[t - t%step_size]
+                            f_t - feature_list[t - t % step_size]
                         )
                     all_goal_list.append(real_goal)
                 gen_token_list.append(x_t)
@@ -210,6 +214,7 @@ def recurrent_func(f_type='pre'):
             if len(real_goal_list) == len(delta_feature_list) + 1:
                 real_goal_list = real_goal_list[:-1]
             prediction_list = prediction_list[:-1]
+            gen_token_list = gen_token_list[:-1]
             real_goal_var = torch.stack(real_goal_list).permute(1, 0, 2)
             all_goal_var = torch.stack(all_goal_list).permute(1, 0, 2)
             prediction_var = torch.stack(prediction_list).permuet(1, 0, 2)
@@ -275,22 +280,22 @@ def recurrent_func(f_type='pre'):
                 '''
                 Generator forward step.
                 '''
-                x_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal, real_goal,\
+                _, h_m_t, c_m_t, h_w_t, c_w_t, last_goal, real_goal,\
                 sub_goal, probs, t_ = generator(
                         x_t, f_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal,
                         real_goal, t, temperature
                     )
                 if t % step_size == 0:
-                    real_goal = last_goal
+                    if t > 0:
+                        real_goal = last_goal
                     last_goal = Variable(torch.zeros(
                         batch_size, goal_out_size
                     ))
                     if use_cuda:
                         last_goal = last_goal.cuda(async=True)
                 if t > 0:
-                    gen_token_list.append(
-                        input_x[:, t - 1]
-                    )
+                    x_t = input_x[:, t - 1].contiguous()
+                    gen_token_list.append(x_t)
                 t = t_
 
             '''
@@ -301,10 +306,17 @@ def recurrent_func(f_type='pre'):
                 '''
                 Extract feature f_t.
                 '''
-                cur_sen = torch.stack(gen_token_list).permute(1, 0)
-                cur_sen = F.pad(
-                    cur_sen, (0, seq_len - t), value=-1
-                )
+                if len(gen_token_list) == 0:
+                    cur_sen = Variable(nn.init.constant(
+                        torch.zeros(batch_size, seq_len), -1)
+                    ).long()
+                    if use_cuda:
+                        cur_sen = cur_sen.cuda(async=True)
+                else:
+                    cur_sen = torch.stack(gen_token_list).permute(1, 0)
+                    cur_sen = F.pad(
+                        cur_sen, (0, seq_len - t), value=-1
+                    )
                 f_t = discriminator(cur_sen)["feature"]
 
                 '''
@@ -326,6 +338,174 @@ def recurrent_func(f_type='pre'):
                 t = t_
             gen_token = torch.stack(gen_token_list).permute(1, 0)
             return gen_token
+    elif f_type == 'gen':
+        def func(model_dict, use_cuda=False, temperature=1.0):
+            '''
+            Get generator and discriminator
+            '''
+            generator = model_dict['generator']
+            discriminator = model_dict['discriminator']
 
+            '''
+            Initialize variables and lists for forward step.
+            '''
+            h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t = \
+                init_vars(generator, discriminator, use_cuda)
+            t = 0
+            gen_token_list = []
+            batch_size = generator.worker.batch_size
+            seq_len = discriminator.seq_len
+            step_size = generator.step_size
+            goal_out_size = generator.worker.goal_out_size
+
+            '''
+            Perform generator forward step.
+            '''
+            while t < seq_len:
+                '''
+                Extract feature f_t.
+                '''
+                if t == 0:
+                    cur_sen = Variable(nn.init.constant(
+                        torch.zeros(batch_size, seq_len), -1)
+                    ).long()
+                    if use_cuda:
+                        cur_sen = cur_sen.cuda(async=True)
+                else:
+                    cur_sen = torch.stack(gen_token_list).permute(1, 0)
+                    cur_sen = F.pad(
+                        cur_sen, (0, seq_len - t), value=-1
+                    )
+                f_t = discriminator(cur_sen)["feature"]
+
+                '''
+                Generator forward step.
+                '''
+                x_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal, real_goal,\
+                sub_goal, probs, t_ = generator(
+                        x_t, f_t, h_m_t, c_m_t, h_w_t, c_w_t, last_goal,
+                        real_goal, t, temperature
+                    )
+                if t % step_size == 0:
+                    if t > 0:
+                        real_goal = last_goal
+                    last_goal = Variable(torch.zeros(
+                        batch_size, goal_out_size
+                    ))
+                    if use_cuda:
+                        last_goal = last_goal.cuda(async=True)
+                gen_token_list.append(x_t)
+                t = t_
+            gen_token = torch.stack(gen_token_list).permute(1, 0)
+            return gen_token
     else:
         raise ("Invalid function type!")
+
+def get_sample(model_dict, use_cuda=False, temperature=1.0):
+    return recurrent_func('gen')(model_dict, use_cuda, temperature)
+
+def get_rewards(model_dict, input_x, rollout_num,
+               use_cuda=False, temperature=1.0, delta=16.0):
+    '''
+    Get generator and discriminator.
+    '''
+    generator = model_dict["generator"]
+    discriminator = model_dict["discriminator"]
+    discriminator = discriminator.eval()
+
+    '''
+    Prepare some constants.
+    '''
+    seq_len = discriminator.seq_len
+    step_size = generator.step_size
+
+    '''
+    Perform rollout and calculate reward.
+    '''
+    rewards = []
+    rollout_func = recurrent_func('rollout')
+    for i in range(rollout_num):
+        given_num = 0
+        while given_num < seq_len:
+            sample_for_reward = rollout_func(model_dict, input_x, given_num,
+                                             use_cuda, temperature)
+            pred = discriminator(sample_for_reward)['pred']
+            pred = pred[:, 1].data.numpy()
+            pred = pred.view(-1)
+            if i == 0:
+                rewards.append(pred)
+            else:
+                rewards[int(given_num / step_size - 1)] += pred
+            given_num += step_size
+    rewards = rescale(rewards, delta) / rollout_num
+    if use_cuda:
+        rewards = rewards.cuda(async=True)
+    discriminator = discriminator.train()
+    return rewards
+
+def rescale(rewards, delta=16.0):
+    '''
+    : param rewards:
+        type: list
+        length: seq_len / c
+        elements: np.array(size=batch_size)
+    '''
+    r = np.array(rewards) # r [seq_len / c * batch_size]
+    _, batch_size = r.shape
+    order = np.argsort(r)
+    rank = np.argsort(order)
+    rank = batch_size - rank
+    rescaled_rewards = expit(delta * (0.5 - rank / batch_size))
+    rescaled_rewards = np.transpose(rescaled_rewards)
+    return Variable(torch.from_numpy(rescaled_rewards)).float()
+
+def loss_func(f_type='pre_worker'):
+    '''
+    There are five kinds of loss functions:
+        'pre_worker', 'pre_manager', 'adv_worker', 'adv_manager',
+        'dis'
+    '''
+    def one_hot(x):
+        pass
+
+    if f_type == 'pre_manager':
+        def func(real_goal, delta_feature):
+            loss = torch.mean(1.0 - F.cosine_similarity(
+                real_goal, delta_feature, dim=2
+            ))
+            return -loss
+
+    elif f_type == 'pre_worker':
+        def func(real_data, prediction):
+            prediction = torch.clamp(prediction, 1e-20, 1.0)
+            loss = -torch.mean(
+                one_hot(real_data) * torch.log(prediction)
+            )
+            return loss
+
+    elif f_type ==  'adv_manager':
+        def func(rewards, real_goal, delta_feature):
+            loss = -torch.mean(
+                rewards * (1.0 - F.cosine_similarity(
+                    delta_feature, real_goal, dim=2
+                ))
+            )
+            return loss
+
+    elif f_type == 'adv_worker':
+        def func(all_goal, delta_feature_for_worker, gen_token,
+                 prediction):
+            intrinsic_rewards = 1.0 - F.cosine_similarity(
+                all_goal, delta_feature_for_worker, dim=2
+            )
+            prediction = torch.clamp(prediction, 1e-20, 1.0)
+            loss = -torch.mean(intrinsic_rewards * (
+                one_hot(gen_token) * torch.log(prediction)
+            ))
+            return loss
+
+    elif f_type == 'dis':
+        pass
+
+    else:
+        raise ("Invalid loss function type!")
