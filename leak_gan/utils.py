@@ -15,7 +15,7 @@ def init_vars(generator, discriminator, use_cuda=False):
     real_goal = generator.manager.goal_init
     x_t = Variable(nn.init.constant(torch.Tensor(
         generator.worker.batch_size
-    ), discriminator.start_token))
+    ), discriminator.start_token)).long()
     vs = [h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t]
     if use_cuda:
         for var in vs:
@@ -459,14 +459,23 @@ def rescale(rewards, delta=16.0):
     rescaled_rewards = np.transpose(rescaled_rewards)
     return Variable(torch.from_numpy(rescaled_rewards)).float()
 
+def one_hot(x, vocab_size, use_cuda=False):
+    batch_size, seq_len = x.size()
+    out = torch.zeros(batch_size * seq_len, vocab_size)
+    x = x.view(-1, 1)
+    out = out.scatter_(1, x.data, 1.0)
+    out = out.view(batch_size, seq_len, vocab_size)
+    out = Variable(out)
+    if use_cuda:
+        out = out.cuda(async=True)
+    return out
+
 def loss_func(f_type='pre_worker'):
     '''
     There are five kinds of loss functions:
         'pre_worker', 'pre_manager', 'adv_worker', 'adv_manager',
         'dis'
     '''
-    def one_hot(x):
-        pass
 
     if f_type == 'pre_manager':
         def func(real_goal, delta_feature):
@@ -476,10 +485,11 @@ def loss_func(f_type='pre_worker'):
             return -loss
 
     elif f_type == 'pre_worker':
-        def func(real_data, prediction):
+        def func(real_data, prediction, vocab_size, use_cuda=False):
             prediction = torch.clamp(prediction, 1e-20, 1.0)
             loss = -torch.mean(
-                one_hot(real_data) * torch.log(prediction)
+                one_hot(real_data, vocab_size, use_cuda) *
+                torch.log(prediction)
             )
             return loss
 
@@ -494,18 +504,35 @@ def loss_func(f_type='pre_worker'):
 
     elif f_type == 'adv_worker':
         def func(all_goal, delta_feature_for_worker, gen_token,
-                 prediction):
+                 prediction, vocab_size, use_cuda=False):
             intrinsic_rewards = 1.0 - F.cosine_similarity(
                 all_goal, delta_feature_for_worker, dim=2
             )
             prediction = torch.clamp(prediction, 1e-20, 1.0)
             loss = -torch.mean(intrinsic_rewards * (
-                one_hot(gen_token) * torch.log(prediction)
+                one_hot(gen_token, vocab_size, use_cuda) *
+                torch.log(prediction)
             ))
             return loss
 
     elif f_type == 'dis':
-        pass
+        def func(discriminator, input_x, score, use_cuda=False):
+            '''
+            : param input_x:
+                size(batch_size * seq_len)
+                type(torch.LongTensor)
+            : param score:
+                size(batch_size * seq_len * vocab_size)
+                type(torch.FloatTensor)
+            '''
+            loss_func = nn.CrossEntropyLoss()
+            if use_cuda:
+                loss_func = loss_func.cuda()
+            input_x = input_x.view(-1)
+            batch_size, seq_len, out_size = score.size()
+            score = score.view(batch_size * seq_len, -1)
+            loss = loss_func(score, input_x) + discriminator.l2_loss()
+            return loss
 
     else:
         raise ("Invalid loss function type!")
