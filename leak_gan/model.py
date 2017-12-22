@@ -121,7 +121,7 @@ class Discriminator(nn.Module):
         feature = self.highway(feature)
         feature = self.dropout(feature)
         score = self.fc(feature)
-        pred = F.softmax(score)
+        pred = F.softmax(score, dim=1)
         return {"pred":pred, "feature":feature, "score":score}
 
     def l2_loss(self):
@@ -153,7 +153,7 @@ class Manager(nn.Module):
 
     def _init_params(self):
         for param in self.parameters():
-            nn.init.normal(std=0.1)
+            nn.init.normal(param, std=0.1)
         self.goal_init.data = truncated_normal(
             self.goal_init.data.shape
             )
@@ -182,7 +182,7 @@ class Worker(nn.Module):
         self.goal_size = goal_size
         self.embedding = nn.Embedding(self.vocab_size, self.embed_dim)
         self.recurrent_unit = nn.LSTMCell(self.embed_dim, self.hidden_dim)
-        self.fc = nn.Linear(self.hidden_dim, self.goal_size)
+        self.fc = nn.Linear(self.hidden_dim, self.goal_size*self.vocab_size)
         self.goal_change = nn.Parameter(torch.zeros(
             self.goal_out_size, self.goal_size
         ))
@@ -203,13 +203,11 @@ class Worker(nn.Module):
 
 class Generator(nn.Module):
 
-    def __init__(self, args_dict, step_size):
-        super(self, Generator).__init__()
-        manager_args = args_dict["manager"]
-        worker_args = args_dict["worker"]
+    def __init__(self, worker_params, manager_params, step_size):
+        super(Generator, self).__init__()
         self.step_size = step_size
-        self.worker = Worker(**worker_args)
-        self.manager = Manager(*manager_args)
+        self.worker = Worker(**worker_params)
+        self.manager = Manager(**manager_params)
 
     def init_hidden(self):
         h = Variable(torch.zeros(
@@ -233,6 +231,6 @@ class Generator(nn.Module):
         w_t = torch.unsqueeze(w_t, -1)
         logits = torch.squeeze(torch.matmul(O, w_t))
         probs = F.softmax(temperature * logits, dim=1)
-        x_tp1 = Variable(Categorical(probs).sample())
+        x_tp1 = Categorical(probs).sample()
         return x_tp1, h_m_tp1, c_m_tp1, h_w_tp1, c_w_tp1,\
                 last_goal_temp, real_goal, sub_goal, probs, t + 1
