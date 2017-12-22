@@ -16,10 +16,14 @@ def init_vars(generator, discriminator, use_cuda=False):
     x_t = Variable(nn.init.constant(torch.Tensor(
         generator.worker.batch_size
     ), discriminator.start_token)).long()
-    vs = [h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t]
+    vs_ = [h_w_t, c_w_t, h_m_t, c_m_t, last_goal, real_goal, x_t]
+    vs = []
     if use_cuda:
-        for var in vs:
+        for var in vs_:
             var = var.cuda(async=True)
+            vs.append(var)
+    else:
+        vs = vs_
     return vs
 
 def recurrent_func(f_type='pre'):
@@ -438,7 +442,10 @@ def get_rewards(model_dict, input_x, rollout_num,
             sample_for_reward = rollout_func(model_dict, input_x, given_num,
                                              use_cuda, temperature)
             pred = discriminator(sample_for_reward)['pred']
-            pred = pred[:, 1].data.numpy()
+            pred = pred[:, 1].data
+            if use_cuda:
+                pred = pred.cpu()
+            pred = pred.numpy()
             pred = pred.reshape(-1)
             if i == 0:
                 rewards.append(pred)
@@ -470,6 +477,8 @@ def rescale(rewards, delta=16.0):
 def one_hot(x, vocab_size, use_cuda=False):
     batch_size, seq_len = x.size()
     out = torch.zeros(batch_size * seq_len, vocab_size)
+    if use_cuda:
+        out = out.cuda()
     x = x.contiguous()
     x = x.view(-1, 1)
     out = out.scatter_(1, x.data, 1.0)
