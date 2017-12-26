@@ -77,6 +77,7 @@ def recurrent_func(f_type='pre'):
                 logits_list.append(logits)
             logits_var = torch.stack(logits_list).permute(1, 0, 2)
             return logits_var
+        return func
 
     elif f_type == 'gen':
         def func(net, use_cuda=False):
@@ -95,6 +96,7 @@ def recurrent_func(f_type='pre'):
                 gen_token_list.append(x_t)
             gen_token_var = torch.stack(gen_token_list).permute(1, 0)
             return gen_token_var
+        return func
 
 def loss_func(net, real_data, use_cuda=False):
     logits = recurrent_func('pre')(net, real_data, use_cuda)

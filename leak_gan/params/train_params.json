@@ -3,8 +3,9 @@
     "decay_step_size":200,
     "decay_rate":0.99,
     "total_batch":800,
-    "pos_filepath":"./save/real_data.npz",
-    "neg_filepath":"./save/gen_data.npz",
-    "eval_filepath":"./save/eval_data.npz",
+    "generated_num":10000,
+    "pos_filepath":"./data/corpus.npy",
+    "neg_filepath":"./data/gen_data.npy",
+    "eval_filepath":"./data/eval_data.npy",
     "model_path":"./ckpts/"
 }

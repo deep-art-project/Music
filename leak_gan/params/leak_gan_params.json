@@ -8,7 +8,7 @@
         "num_filters":[100,200,200,200,200,100,100,100,100,100,160,160],
         "start_token":0,
         "goal_out_size":null,
-        "step_size":4,
+        "step_size":5,
         "dropout_keep_prob":1.0,
         "l2_reg_lambda":0.2
     },
@@ -26,6 +26,6 @@
             "goal_out_size":null,
             "goal_size":16
         },
-        "step_size":4
+        "step_size":5
     }
 }
