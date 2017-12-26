@@ -4,6 +4,7 @@
     "decay_rate":0.99,
     "total_batch":800,
     "generated_num":10000,
+    "pre_epoch_num":80,
     "pos_filepath":"./data/corpus.npy",
     "neg_filepath":"./data/gen_data.npy",
     "eval_filepath":"./data/eval_data.npy",

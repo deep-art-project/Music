@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from utils import recurrent_func, loss_func, get_rewards
 import json
 import numpy as np
+import target
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -55,6 +56,8 @@ def main(type="discriminator", use_cuda=False):
         test_generator(use_cuda)
     elif type == "loss_func":
         test_loss_func(use_cuda)
+    elif type == "target":
+        test_target(use_cuda)
     elif type == "dataloader":
         test_dataloader()
     elif type == "train":
@@ -224,10 +227,36 @@ def test_loss_func(use_cuda=False):
         if i > 0:
             break
 
+def test_target(use_cuda=False):
+    with open("./params/target_params.json", 'r') as f:
+        params = json.load(f)
+    f.close()
+    net = target.Target(**params)
+    if use_cuda:
+        net = net.cuda()
+    dataloader = prepare_fake_data()
+    optimizer = optim.Adam(net.parameters(), lr = 0.0001)
+    for i, sample in enumerate(dataloader):
+        sample = Variable(sample)
+        if use_cuda:
+            sample = sample.cuda()
+        optimizer.zero_grad()
+        loss = target.loss_func(net, sample, use_cuda)
+        loss.backward()
+        optimizer.step()
+
+        if i > 0:
+            break
+    gen = target.generate(net, use_cuda)
+    print(gen.size())
+    print("Target test finished!")
+    print("\n")
+
+
 def test_dataloader():
     pass
 
 def test_train():
     pass
 
-main('loss_func', use_cuda=torch.cuda.is_available())
+main('target', use_cuda=torch.cuda.is_available())

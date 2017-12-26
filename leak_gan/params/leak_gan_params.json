@@ -9,7 +9,7 @@
         "start_token":0,
         "goal_out_size":null,
         "step_size":5,
-        "dropout_keep_prob":1.0,
+        "dropout_keep_prob":0.8,
         "l2_reg_lambda":0.2
     },
     "generator_params":{

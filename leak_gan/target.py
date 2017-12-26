@@ -9,8 +9,9 @@ class Target(nn.Module):
 
     def __init__(self, vocab_size, batch_size, embed_dim, hidden_dim,
                  seq_len, start_token):
+        super(Target, self).__init__()
         self.vocab_size = vocab_size
-        self.batch_size = self.batch_size
+        self.batch_size = batch_size
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.seq_len = seq_len
@@ -40,10 +41,11 @@ class Target(nn.Module):
         return h, c
 
     def forward(self, t, x_t, h_t, c_t):
-        h_tp1, c_tp1 = self.recurrent_unit(x_t, (h_t, c_t))
+        x_t_embeded = self.embed(x_t)
+        h_tp1, c_tp1 = self.recurrent_unit(x_t_embeded, (h_t, c_t))
         logits = self.fc(h_tp1)
-        probs = F.softmax(logits)
-        next_token = Variable(Categorical(probs).sample())
+        probs = F.softmax(logits, dim=1)
+        next_token = Categorical(probs).sample()
         return t + 1, next_token, h_tp1, c_tp1, logits, next_token
 
 def init_vars(net, use_cuda=False):
@@ -53,8 +55,9 @@ def init_vars(net, use_cuda=False):
     ))
     vs = [x_t, h_t, c_t]
     if use_cuda:
-        for v in vs:
+        for i, v in enumerate(vs):
             v = v.cuda(async=True)
+            vs[i] = v
     return vs
 
 def recurrent_func(f_type='pre'):
@@ -72,7 +75,7 @@ def recurrent_func(f_type='pre'):
             Perform forward process.
             '''
             for t in range(seq_len):
-                _, _, h_t, c_t, logits, next_token = net(x_t, h_t, c_t)
+                _, _, h_t, c_t, logits, next_token = net(t, x_t, h_t, c_t)
                 x_t = real_data[:, t].contiguous()
                 logits_list.append(logits)
             logits_var = torch.stack(logits_list).permute(1, 0, 2)
@@ -92,14 +95,14 @@ def recurrent_func(f_type='pre'):
             Perform forward process.
             '''
             for t in range(seq_len):
-                _, x_t, h_t, c_t, logits, next_token = net(x_t, h_t, c_t)
+                _, x_t, h_t, c_t, logits, next_token = net(t, x_t, h_t, c_t)
                 gen_token_list.append(x_t)
             gen_token_var = torch.stack(gen_token_list).permute(1, 0)
             return gen_token_var
         return func
 
 def loss_func(net, real_data, use_cuda=False):
-    logits = recurrent_func('pre')(net, real_data, use_cuda)
+    logits = recurrent_func('pre')(net, real_data, use_cuda).contiguous()
     batch_size, seq_len = real_data.size()
     f = nn.CrossEntropyLoss()
     if use_cuda:
