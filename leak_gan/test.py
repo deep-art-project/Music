@@ -1,6 +1,7 @@
 from model import Discriminator, Generator
 from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
+from train import pretrain_generator, pretrain_discriminator, adversarial_train
 from utils import recurrent_func, loss_func, get_rewards
 import json
 import numpy as np
@@ -13,10 +14,10 @@ import torch.nn as nn
 class Fake_Dataset(Dataset):
 
     def __init__(self):
-        self.data = np.random.randint(5000, size=(6400, 20))
+        self.data = np.random.randint(5000, size=(128, 20))
 
     def __len__(self):
-        return 6400
+        return 128
 
     def __getitem__(self, idx):
         return torch.from_numpy(self.data[idx]).long()
@@ -43,6 +44,37 @@ def prepare_model_dict(use_cuda=False):
     model_dict = {"generator":generator, "discriminator":discriminator}
     return model_dict
 
+def prepare_optimizer_dict(model_dict, lr_dict):
+    generator = model_dict["generator"]
+    discriminator = model_dict["discriminator"]
+    worker = generator.worker
+    manager = generator.manager
+
+    m_lr = lr_dict["manager"]
+    w_lr = lr_dict["worker"]
+    d_lr = lr_dict["discriminator"]
+
+    w_optimizer = optim.Adam(worker.parameters(), lr=w_lr)
+    m_optimizer = optim.Adam(manager.parameters(), lr=m_lr)
+    d_optimizer = optim.Adam(discriminator.parameters(), lr=d_lr)
+
+    return {"worker":w_optimizer, "manager":m_optimizer,
+    "discriminator":d_optimizer}
+
+def prepare_scheduler_dict(optmizer_dict, step_size=200, gamma=0.99):
+    w_optimizer = optmizer_dict["worker"]
+    m_optimizer = optmizer_dict["manager"]
+    d_optimizer = optmizer_dict["discriminator"]
+
+    w_scheduler = optim.lr_scheduler.StepLR(w_optimizer, step_size=step_size,
+        gamma=gamma)
+    m_scheduler = optim.lr_scheduler.StepLR(m_optimizer, step_size=step_size,
+        gamma=gamma)
+    d_scheduler = optim.lr_scheduler.StepLR(d_optimizer, step_size=step_size,
+        gamma=gamma)
+    return {"worker":w_scheduler, "manager":m_scheduler,
+    "discriminator":d_scheduler}
+
 def prepare_fake_data():
     dataset = Fake_Dataset()
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True,
@@ -51,7 +83,7 @@ def prepare_fake_data():
 
 def main(type="discriminator", use_cuda=False):
     if type == "discriminator":
-        test_discriminator()
+        test_discriminator(use_cuda)
     elif type == "generator":
         test_generator(use_cuda)
     elif type == "loss_func":
@@ -61,11 +93,11 @@ def main(type="discriminator", use_cuda=False):
     elif type == "dataloader":
         test_dataloader()
     elif type == "train":
-        test_train()
+        test_train(use_cuda)
     else:
         raise ("Invalid test type!")
 
-def test_discriminator():
+def test_discriminator(use_cuda):
     net = Discriminator(
         20, 2, 2000, 64,
         [1, 2, 4, 6, 8, 10, 20],
@@ -77,10 +109,14 @@ def test_discriminator():
     sentence = Variable(torch.from_numpy(sentence).long())
     target = np.random.randint(2, size=(64))
     target = Variable(torch.from_numpy(target).long())
+    if use_cuda:
+        net = net.cuda()
+        target = target.cuda()
+        sentence = sentence.cuda()
     out_dict = net(sentence)
     print("Disciminator forward test passed.")
-    loss_function = nn.CrossEntropyLoss()
-    loss = loss_function(out_dict["score"], target)
+    loss_function = nn.CrossEntropyLoss().cuda()
+    loss = loss_function(out_dict["score"], target) + net.l2_loss()
     loss.backward()
     print("Disciminator backward test passed.")
 
@@ -256,7 +292,40 @@ def test_target(use_cuda=False):
 def test_dataloader():
     pass
 
-def test_train():
-    pass
+def test_train(use_cuda):
+    '''
+    Prepare all needed models, optimizers, schedulers and dataloader.
+    '''
+    model_dict = prepare_model_dict(use_cuda)
+    lr_dict = {"worker":1e-4, "manager":1e-4, "discriminator":1e-4}
+    optimizer_dict = prepare_optimizer_dict(model_dict, lr_dict)
+    scheduler_dict = prepare_scheduler_dict(optimizer_dict)
+    dataloader = prepare_fake_data()
 
-main('target', use_cuda=torch.cuda.is_available())
+    '''
+    Start test all training functions.
+    '''
+    model_dict, optimizer_dict, scheduler_dict = \
+    pretrain_generator(model_dict, optimizer_dict, scheduler_dict,
+        dataloader, vocab_size=5258, use_cuda=torch.cuda.is_available())
+    print("Pretrain generator test finished!")
+
+    with open("./params/dis_data_params.json", 'r') as f:
+        params = json.load(f)
+    f.close()
+    positive_file = params["positive_filepath"]
+    negative_file = params["negative_filepath"]
+
+    model_dict, optimizer_dict, scheduler_dict= \
+    pretrain_discriminator(model_dict, optimizer_dict, scheduler_dict, params,
+        positive_file, negative_file, num_batches=2, num_epochs=1,
+        use_cuda=torch.cuda.is_available())
+    print("Pretrain discriminator test finished!")
+
+    adversarial_train(model_dict, optimizer_dict, scheduler_dict,
+        params, 5258, positive_file, negative_file, num_batches=2,
+        use_cuda=torch.cuda.is_available())
+    print("Adversarial train test finished!")
+
+
+main('train', use_cuda=torch.cuda.is_available())
