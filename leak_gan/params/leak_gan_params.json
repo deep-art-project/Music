@@ -2,7 +2,7 @@
     "discriminator_params":{
         "seq_len":20,
         "num_classes":2,
-        "vocab_size":5000,
+        "vocab_size":5258,
         "dis_emb_dim":64,
         "filter_sizes":[1,2,3,4,5,6,7,8,9,10,15,20],
         "num_filters":[100,200,200,200,200,100,100,100,100,100,160,160],
@@ -20,7 +20,7 @@
         },
         "worker_params":{
             "batch_size":64,
-            "vocab_size":5000,
+            "vocab_size":5258,
             "embed_dim":32,
             "hidden_dim":32,
             "goal_out_size":null,
