@@ -5,8 +5,9 @@
     "total_batch":800,
     "generated_num":10000,
     "pre_epoch_num":80,
-    "pos_filepath":"./data/corpus.npy",
+    "pos_filepath":"./data/train_corpus.npy",
     "neg_filepath":"./data/gen_data.npy",
     "eval_filepath":"./data/eval_data.npy",
-    "model_path":"./ckpts/"
+    "model_path":"./ckpts/",
+    "seed":233
 }

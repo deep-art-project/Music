@@ -307,11 +307,13 @@ def test_train(use_cuda):
     '''
     model_dict, optimizer_dict, scheduler_dict = \
     pretrain_generator(model_dict, optimizer_dict, scheduler_dict,
-        dataloader, vocab_size=5258, use_cuda=torch.cuda.is_available())
+        dataloader, vocab_size=5258, use_cuda=use_cuda)
     print("Pretrain generator test finished!")
 
     with open("./params/dis_data_params.json", 'r') as f:
         params = json.load(f)
+    if use_cuda:
+        params["pin_memory"] = True
     f.close()
     positive_file = params["positive_filepath"]
     negative_file = params["negative_filepath"]
@@ -319,13 +321,13 @@ def test_train(use_cuda):
     model_dict, optimizer_dict, scheduler_dict= \
     pretrain_discriminator(model_dict, optimizer_dict, scheduler_dict, params,
         positive_file, negative_file, num_batches=2, num_epochs=1,
-        use_cuda=torch.cuda.is_available())
+        use_cuda=use_cuda)
     print("Pretrain discriminator test finished!")
 
     adversarial_train(model_dict, optimizer_dict, scheduler_dict,
         params, 5258, positive_file, negative_file, num_batches=2,
-        use_cuda=torch.cuda.is_available())
+        use_cuda=use_cuda)
     print("Adversarial train test finished!")
 
 
-main('train', use_cuda=torch.cuda.is_available())
+main('train', use_cuda=False)

@@ -21,10 +21,14 @@ def get_arguments():
     train_params = get_params("./params/train_params.json")
     leak_gan_params = get_params("./params/leak_gan_params.json")
     target_params = get_params("./params/target_params.json")
+    dis_data_params = get_params("./params/dis_data_params.json")
+    real_data_params = get_params("./params/real_data_params.json")
     return {
         "train_params":train_params,
         "leak_gan_params":leak_gan_params,
-        "target_params":target_params
+        "target_params":target_params,
+        "dis_data_params":dis_data_params,
+        "real_data_params":real_data_params
     }
 
 def get_optimizer(model, lr):
@@ -234,7 +238,7 @@ def adversarial_train(model_dict, optimizer_dict, scheduler_dict,
                     data = data.cuda(async=True)
                     label = label.cuda(async=True)
                 outs = discriminator(data)
-                loss = cross_entropy(outs["score"], label) + \
+                loss = cross_entropy(outs["score"], label.view(-1)) + \
                        discriminator.l2_loss()
                 d_optimizer.zero_grad()
                 d_lr_scheduler.step()
@@ -255,3 +259,9 @@ def adversarial_train(model_dict, optimizer_dict, scheduler_dict,
     scheduler_dict["discriminator"] = d_lr_scheduler
 
     return model_dict, optimizer_dict, scheduler_dict
+
+def save_checkpoint():
+    pass
+
+def main():
+    pass
