@@ -330,4 +330,4 @@ def test_train(use_cuda):
     print("Adversarial train test finished!")
 
 
-main('train', use_cuda=False)
+#main('train', use_cuda=False)

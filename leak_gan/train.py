@@ -3,8 +3,10 @@ from model import Discriminator, Generator
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm
 from utils import recurrent_func, loss_func, get_sample, get_rewards
+import glob
 import json
 import numpy as np
+import os
 import target
 import torch
 import torch.nn as nn
@@ -260,8 +262,24 @@ def adversarial_train(model_dict, optimizer_dict, scheduler_dict,
 
     return model_dict, optimizer_dict, scheduler_dict
 
-def save_checkpoint():
-    pass
+def save_checkpoint(model_dict, optimizer_dict, scheduler_dict,
+                    status, ckpt_num, replace=False):
+    filename = "cpkt" + str(ckpt_num) + ".pth.tar"
+    torch.save({"model_dict":model_dict, "optimizer_dict": optimizer_dict,
+        "scheduler_dict":scheduler_dict, "status":status,
+        "ckpt_num":ckpt_num}, filename)
+    if replace:
+        ckpts = glob.glob("cpkt*")
+        ckpt_nums = [int(x.split('.')[0][4:]) for x in ckpts]
+        oldest_ckpt = "ckpt" + str(max(ckpt_nums)) + ".pth.tar"
+        os.remove(oldest_ckpt)
+
+def restore_checkpoint(ckpt_path):
+    ckpt = torch.load(ckpt_path)
+    status = ckpt["status"]
+    d_status = status["discriminator"]
+    g_status = status["generator"]
+    
 
 def main():
     pass

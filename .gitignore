@@ -5,3 +5,4 @@ restore/
 *.pyc
 *.wav
 *.log
+*.pth.tar
